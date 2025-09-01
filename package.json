@@ -11,13 +11,14 @@
     "test:engine": "node --loader ts-node/esm src/test-engine.ts"
   },
   "dependencies": {
+    "dexie": "^3.2.4",
+    "docx": "^8.5.0",
+    "docx-preview": "^0.3.6",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.6.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "zustand": "^4.4.7",
-    "mammoth": "^1.6.0",
-    "docx": "^8.5.0",
-    "jszip": "^3.10.1",
-    "dexie": "^3.2.4"
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.21",

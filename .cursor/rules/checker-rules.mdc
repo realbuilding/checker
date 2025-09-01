@@ -1,0 +1,5 @@
+---
+description:启动本地服务器时，不要使用 5 开头的端口
+globs:
+alwaysApply: true
+---

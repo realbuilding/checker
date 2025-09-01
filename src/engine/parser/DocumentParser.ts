@@ -64,17 +64,32 @@ export class DocumentParser {
       { arrayBuffer },
       {
         styleMap: [
+          // 改进的样式映射，更好地处理标题和段落
+          "p[style-name='Heading 1'] => h1:fresh",
+          "p[style-name='Heading 2'] => h2:fresh", 
+          "p[style-name='Heading 3'] => h3:fresh",
+          "p[style-name='Heading 4'] => h4:fresh",
+          "p[style-name='Heading 5'] => h5:fresh",
+          "p[style-name='Heading 6'] => h6:fresh",
+          "p[style-name='Title'] => h1:fresh",
+          "p[style-name='Subtitle'] => h2:fresh",
+          // 保留所有段落，包括空段落
           "p => p:fresh",
           "b => strong",
-          "i => em"
+          "i => em",
+          "u => u",
+          "strike => del"
         ],
         includeDefaultStyleMap: true,
         includeEmbeddedStyleMap: true,
+        // 保留空段落
+        ignoreEmptyParagraphs: false,
+        // 自定义样式处理器
         transformDocument: mammoth.transforms.paragraph(function(element) {
           // 保留段落的样式信息
           return element;
         }),
-        // 自定义样式处理器，保留颜色信息
+        // 自定义样式映射构建器
         styleMapBuilder: function(styleMap) {
           return styleMap;
         }
@@ -118,11 +133,10 @@ export class DocumentParser {
       const paragraphXml = paragraphMatch[1];
       const paragraph = this.parseParagraph(paragraphXml, currentIndex);
       
-      if (paragraph.text.trim()) {
-        paragraphs.push(paragraph);
-        fullText += paragraph.text;
-        currentIndex += paragraph.text.length;
-      }
+      // 保留所有段落，包括空段落
+      paragraphs.push(paragraph);
+      fullText += paragraph.text;
+      currentIndex += paragraph.text.length;
     }
     
     return {
@@ -136,6 +150,9 @@ export class DocumentParser {
     const runs: RunInfo[] = [];
     let paragraphText = '';
     let currentIndex = startIndex;
+    
+    // 检查是否是标题段落
+    const isHeading = this.isHeadingParagraph(paragraphXml);
     
     // 提取运行(run) - 基于PoC验证的算法
     const runRegex = /<w:r\b[^>]*>(.*?)<\/w:r>/gs;
@@ -152,12 +169,33 @@ export class DocumentParser {
       }
     }
     
+    // 如果是空段落，添加一个换行符以保持结构
+    if (!paragraphText.trim()) {
+      paragraphText = '\n';
+      currentIndex += 1;
+    }
+    
     return {
       text: paragraphText,
       runs,
       startIndex,
-      endIndex: currentIndex
+      endIndex: currentIndex,
+      isHeading
     };
+  }
+  
+  private isHeadingParagraph(paragraphXml: string): boolean {
+    // 检查段落样式名称
+    const styleMatch = paragraphXml.match(/<w:pStyle\s+w:val="([^"]+)"/);
+    if (styleMatch) {
+      const styleName = styleMatch[1].toLowerCase();
+      return styleName.includes('heading') || styleName.includes('title');
+    }
+    
+    // 检查是否有标题相关的属性
+    return paragraphXml.includes('<w:outlineLvl') || 
+           paragraphXml.includes('<w:heading') ||
+           paragraphXml.includes('<w:title');
   }
   
   private parseRun(runXml: string, startIndex: number): RunInfo {

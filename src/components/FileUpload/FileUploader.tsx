@@ -58,8 +58,8 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onUploadComplete }) 
       
       setUploadProgress(60);
       
-      // 更新状态
-      setDocument(result.document);
+      // 更新状态，同时传递文件
+      setDocument(result.document, file);
       setDetectionResult(result.result);
       setHighlightedHtml(result.highlightedHtml);
       

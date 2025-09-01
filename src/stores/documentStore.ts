@@ -8,6 +8,10 @@ interface DocumentState {
   originalHtml: string;
   highlightedHtml: string;
   
+  // 文件相关状态
+  currentFile: File | null;
+  fileUrl: string | null;
+  
   // 检测结果
   detectionResult: DetectionResult | null;
   
@@ -21,7 +25,7 @@ interface DocumentState {
   uploadError: string | null;
   
   // Actions
-  setDocument: (document: ParsedDocument) => void;
+  setDocument: (document: ParsedDocument, file?: File) => void;
   setDetectionResult: (result: DetectionResult) => void;
   setHighlightedHtml: (html: string) => void;
   setSelectedError: (errorId: string | null) => void;
@@ -37,6 +41,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   currentDocument: null,
   originalHtml: '',
   highlightedHtml: '',
+  currentFile: null,
+  fileUrl: null,
   detectionResult: null,
   isProcessing: false,
   selectedErrorId: null,
@@ -45,10 +51,24 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   uploadError: null,
   
   // Actions
-  setDocument: (document) => {
+  setDocument: (document, file) => {
+    // 清理之前的文件URL
+    const state = get();
+    if (state.fileUrl) {
+      URL.revokeObjectURL(state.fileUrl);
+    }
+    
+    // 创建新的文件URL
+    let newFileUrl = null;
+    if (file) {
+      newFileUrl = URL.createObjectURL(file);
+    }
+    
     set({ 
       currentDocument: document,
       originalHtml: document.content.html,
+      currentFile: file || null,
+      fileUrl: newFileUrl,
       uploadProgress: 100,
       uploadError: null 
     });
@@ -83,10 +103,18 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
   
   clearDocument: () => {
+    // 清理文件URL
+    const state = get();
+    if (state.fileUrl) {
+      URL.revokeObjectURL(state.fileUrl);
+    }
+    
     set({
       currentDocument: null,
       originalHtml: '',
       highlightedHtml: '',
+      currentFile: null,
+      fileUrl: null,
       detectionResult: null,
       selectedErrorId: null,
       uploadProgress: 0,

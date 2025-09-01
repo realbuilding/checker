@@ -30,6 +30,7 @@ export interface ParagraphInfo {
   runs: RunInfo[];
   startIndex: number;
   endIndex: number;
+  isHeading?: boolean;
 }
 
 export interface RunInfo {

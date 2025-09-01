@@ -62,7 +62,7 @@ export const MainPage: React.FC = () => {
               </h1>
               {currentDocument && (
                 <div className="ml-4 text-sm text-gray-600">
-                  {currentDocument.name}
+                  {currentDocument.metadata?.title || '未知文档'}
                 </div>
               )}
             </div>

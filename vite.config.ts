@@ -8,6 +8,10 @@ export default defineConfig({
     react(),
     // crx({ manifest }) // 临时禁用Chrome扩展插件，以web模式运行
   ],
+  server: {
+    port: 3000,
+    host: true
+  },
   build: {
     rollupOptions: {
       input: {
