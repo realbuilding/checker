@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "文档质量保障平台",
+  "version": "1.0.0",
+  "description": "智能检测Word文档格式问题的Chrome扩展",
+  "action": {
+    "default_title": "打开文档检测工具"
+  },
+  "background": {
+    "service_worker": "src/background.ts"
+  },
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "icons": {
+    "16": "icons/icon16.svg",
+    "48": "icons/icon48.svg", 
+    "128": "icons/icon128.svg"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

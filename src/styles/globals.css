@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 自定义样式 */
+.highlight {
+  background-color: #fef3c7;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.highlight:hover {
+  background-color: #fde047;
+  transform: scale(1.02);
+}
+
+/* 错误类型样式 */
+.error-punctuation {
+  background-color: #fecaca;
+  border: 1px solid #f87171;
+}
+
+.error-spacing {
+  background-color: #e0e7ff;
+  border: 1px solid #a5b4fc;
+}
+
+.error-style {
+  background-color: #dbeafe;
+  border: 1px solid #60a5fa;
+}
+
+.error-structure {
+  background-color: #dcfce7;
+  border: 1px solid #4ade80;
+}
+
+/* 严重级别样式 */
+.severity-error {
+  border-width: 2px;
+  font-weight: 600;
+}
+
+.severity-warning {
+  border-style: dashed;
+}
+
+.severity-info {
+  opacity: 0.8;
+}
+
+/* 选中状态样式 */
+.selected-error {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  border: 2px solid #1d4ed8 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+  animation: pulse-selection 0.3s ease-in-out;
+}
+
+@keyframes pulse-selection {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.red-text {
+  background-color: #fecaca;
+  border: 1px solid #f87171;
+}

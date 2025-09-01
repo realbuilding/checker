@@ -1,0 +1,19 @@
+{
+  "name": "position-mapping-poc",
+  "version": "1.0.0",
+  "description": "PoC for position mapping between docx and HTML",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "docx": "^8.5.0",
+    "mammoth": "^1.6.0",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  }
+}
