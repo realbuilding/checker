@@ -97,6 +97,19 @@ export const ErrorList: React.FC<ErrorListProps> = ({ onScroll }) => {
     }
   };
 
+  // 基于序号滚动到错误卡片（新的主要方法）
+  const scrollToErrorByIndex = (errorIndex: number) => {
+    if (!listRef.current) return;
+
+    const targetCard = listRef.current.querySelector(`[data-error-index="${errorIndex}"]`) as HTMLElement;
+    if (targetCard) {
+      targetCard.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  };
+
   // 监听选中错误变化，自动滚动到对应卡片
   useEffect(() => {
     if (selectedErrorId) {

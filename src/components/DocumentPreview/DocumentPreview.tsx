@@ -39,6 +39,21 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ onScroll }) =>
     }
   }, [detectionResult]);
 
+  // 基于序号滚动到错误位置（新的主要方法）
+  const scrollToErrorByIndex = useCallback((errorIndex: number) => {
+    if (!containerRef.current) return;
+
+    // 优先使用序号定位
+    const targetElement = containerRef.current.querySelector(`[data-error-index="${errorIndex}"]`) as HTMLElement;
+    
+    if (targetElement) {
+      targetElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    }
+  }, []);
+
   // 处理点击高亮元素
   const handleHighlightClick = useCallback((event: Event) => {
     const target = event.target as HTMLElement;

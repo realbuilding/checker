@@ -97,6 +97,133 @@ export class PositionMapper {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
   
+  private escapeHtml(str: string): string {
+    return str.replace(/[&<>"']/g, function(match) {
+      const escapeMap: { [key: string]: string } = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      };
+      return escapeMap[match];
+    });
+  }
+  
+  /**
+   * 核心方法：在HTML中精确注入高亮标签
+   * 基于字符串操作，支持Node.js环境
+   */
+  private injectHighlightIntoHTML(html: string, start: number, end: number, className: string, fullAttributes: string, indexBadge: string, targetText: string): string {
+    // 使用更安全的字符串分析方法
+    const textSegments = this.analyzeHTMLTextSegments(html);
+    
+    // 找到目标文本范围对应的HTML片段
+    const targetSegments = textSegments.filter(seg => 
+      !(seg.textEnd <= start || seg.textStart >= end)
+    );
+    
+    if (targetSegments.length === 0) {
+      console.warn(`⚠️ 全局映射: 在位置 ${start}-${end} 找不到对应的HTML片段`);
+      return html;
+    }
+    
+    // 构建高亮标签
+    const highlightSpan = `<span class="${className}"${fullAttributes}>${indexBadge}${this.escapeHtml(targetText)}</span>`;
+    
+    // 简单情况：目标文本在单个HTML片段内
+    if (targetSegments.length === 1) {
+      const segment = targetSegments[0];
+      const localStart = start - segment.textStart;
+      const localEnd = end - segment.textStart;
+      
+      const beforeText = segment.text.substring(0, localStart);
+      const afterText = segment.text.substring(localEnd);
+      
+      const newSegmentText = beforeText + this.escapeHtml(targetText) + afterText;
+      const newHtmlFragment = segment.htmlFragment.replace(segment.text, beforeText + `__HIGHLIGHT_PLACEHOLDER__` + afterText);
+      const finalHtmlFragment = newHtmlFragment.replace('__HIGHLIGHT_PLACEHOLDER__', highlightSpan.replace(indexBadge + this.escapeHtml(targetText), indexBadge + this.escapeHtml(segment.text.substring(localStart, localEnd))));
+      
+      return html.replace(segment.htmlFragment, finalHtmlFragment);
+    }
+    
+    // 复杂情况：跨片段文本高亮
+    return this.handleMultiSegmentHighlight(html, targetSegments, start, end, highlightSpan, indexBadge);
+  }
+  
+  /**
+   * 分析HTML结构，提取文本片段及其在整体文本中的位置
+   */
+  private analyzeHTMLTextSegments(html: string): Array<{htmlFragment: string, text: string, textStart: number, textEnd: number}> {
+    const segments: Array<{htmlFragment: string, text: string, textStart: number, textEnd: number}> = [];
+    let currentPosition = 0;
+    
+    // 简化的HTML解析：查找所有文本内容
+    const htmlParts = html.split(/(<[^>]+>)/);
+    
+    for (const part of htmlParts) {
+      if (part.startsWith('<') && part.endsWith('>')) {
+        // 这是HTML标签，跳过
+        continue;
+      } else if (part.trim()) {
+        // 这是文本内容
+        const textContent = part;
+        segments.push({
+          htmlFragment: part,
+          text: textContent,
+          textStart: currentPosition,
+          textEnd: currentPosition + textContent.length
+        });
+        currentPosition += textContent.length;
+      }
+    }
+    
+    return segments;
+  }
+  
+  /**
+   * 处理跨HTML片段的高亮
+   */
+  private handleMultiSegmentHighlight(html: string, segments: Array<{htmlFragment: string, text: string, textStart: number, textEnd: number}>, start: number, end: number, highlightSpan: string, indexBadge: string): string {
+    let result = html;
+    
+    // 从后往前处理，避免位置偏移
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const segment = segments[i];
+      const localStart = Math.max(0, start - segment.textStart);
+      const localEnd = Math.min(segment.text.length, end - segment.textStart);
+      
+      if (localStart < localEnd) {
+        const beforeText = segment.text.substring(0, localStart);
+        const highlightText = segment.text.substring(localStart, localEnd);
+        const afterText = segment.text.substring(localEnd);
+        
+        let newFragment: string;
+        if (i === 0) {
+          // 第一个片段，插入完整的高亮标签
+          const fullHighlightSpan = highlightSpan.replace(indexBadge + this.escapeHtml(''), indexBadge + this.escapeHtml(highlightText));
+          newFragment = beforeText + fullHighlightSpan + afterText;
+        } else {
+          // 其他片段，只保留非高亮部分
+          newFragment = beforeText + afterText;
+        }
+        
+        result = result.replace(segment.htmlFragment, newFragment);
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * 生成错误序号标记
+   */
+  private generateErrorIndexBadge(index: number, severity: string): string {
+    const severityClass = severity === 'error' ? '' : severity;
+    const classNames = `error-index ${severityClass}`.trim();
+    return `<span class="${classNames}">${index}</span>`;
+  }
+  
   // 核心方法：将文本位置转换为DOM位置
   textToDOM(textPosition: number): DOMPosition | null {
     return this.positionMap.get(textPosition) || null;
@@ -116,66 +243,100 @@ export class PositionMapper {
     return positions;
   }
   
-  // 根据PoC验证的成功方法：为HTML添加高亮标记
+  // 改进的高亮算法：支持跨标签和复杂HTML结构
   highlightTextRange(html: string, start: number, end: number, className: string = 'highlight', attributes: Record<string, string> = {}): string {
-    const domPositions = this.textRangeToDOM(start, end);
+    try {
+      // 第一步：尝试基于全局文本位置的精确映射
+      const result = this.highlightByGlobalTextPosition(html, start, end, className, attributes);
+      if (result !== html) {
+        return result; // 成功映射
+      }
+      
+      // 第二步：如果全局映射失败，尝试基于段落的映射
+      return this.highlightByParagraphMapping(html, start, end, className, attributes);
+      
+    } catch (error) {
+      console.error(`❌ 高亮失败 ${start}-${end}:`, error);
+      return html;
+    }
+  }
+  
+  /**
+   * 方法1：基于全局文本位置的精确映射
+   * 这个方法能处理跨标签的文本范围
+   */
+  private highlightByGlobalTextPosition(html: string, start: number, end: number, className: string, attributes: Record<string, string>): string {
+    // 从整个HTML中提取纯文本
+    const globalText = this.extractTextFromHtml(html);
     
-    if (domPositions.length === 0) {
-      console.warn(`⚠️ 无法找到文本位置对应的DOM位置: ${start}-${end}`);
+    // 检查位置是否有效
+    if (start >= globalText.length || end > globalText.length || start >= end) {
       return html;
     }
     
-    // 获取目标段落
-    const targetParagraph = domPositions[0];
-    if (!targetParagraph) {
+    const targetText = globalText.substring(start, end);
+    if (!targetText || targetText.trim().length === 0) {
       return html;
     }
     
-    // 提取需要高亮的文本
-    const fullText = this.extractTextFromHtml(targetParagraph.paragraphHtml);
-    const startLocal = domPositions[0].localTextIndex;
-    const endLocal = startLocal + (end - start);
-    const targetText = fullText.substring(startLocal, endLocal);
+    // 构建高亮标签
+    const errorIndex = attributes['data-error-index'];
+    const severity = attributes['data-severity'] || 'warning';
+    const indexBadge = errorIndex ? this.generateErrorIndexBadge(parseInt(errorIndex), severity) : '';
     
-    if (!targetText) {
-      console.warn(`⚠️ 目标文本为空: 位置${start}-${end}, 本地位置${startLocal}-${endLocal}`);
-      return html;
-    }
-    
-    // 构建属性字符串
     const attributeString = Object.entries(attributes)
-      .map(([key, value]) => `${key}="${value}"`)
+      .map(([key, value]) => `${key}="${this.escapeHtml(value)}"`)
       .join(' ');
     const fullAttributes = attributeString ? ` ${attributeString}` : '';
     
-    // 安全的基于段落的高亮方法
-    const originalParagraph = targetParagraph.paragraphHtml;
-    const plainText = this.extractTextFromHtml(originalParagraph);
+    return this.injectHighlightIntoHTML(html, start, end, className, fullAttributes, indexBadge, targetText);
+  }
+  
+  /**
+   * 方法2：基于段落映射的兼容性方法
+   * 保持现有逻辑作为后备方案
+   */
+  private highlightByParagraphMapping(html: string, start: number, end: number, className: string, attributes: Record<string, string>): string {
+    const domPositions = this.textRangeToDOM(start, end);
     
-    // 检查目标文本是否在段落中
-    if (!plainText.includes(targetText)) {
-      console.warn(`⚠️ 高亮失败: 位置${start}-${end}, 目标文本"${targetText}"不在段落中, ErrorID: ${attributes['data-error-id'] || 'unknown'}`);
+    if (domPositions.length === 0) {
+      console.warn(`⚠️ 段落映射: 无法找到位置 ${start}-${end} 对应的DOM位置`);
       return html;
     }
     
-    // 找到目标文本在纯文本中的位置
-    const targetIndex = plainText.indexOf(targetText);
-    if (targetIndex === -1) {
-      console.warn(`⚠️ 高亮失败: 无法找到目标文本"${targetText}", ErrorID: ${attributes['data-error-id'] || 'unknown'}`);
+    const targetParagraph = domPositions[0];
+    if (!targetParagraph) return html;
+    
+    const paragraphText = this.extractTextFromHtml(targetParagraph.paragraphHtml);
+    const startLocal = domPositions[0].localTextIndex;
+    const endLocal = startLocal + (end - start);
+    const targetText = paragraphText.substring(startLocal, endLocal);
+    
+    if (!targetText || !paragraphText.includes(targetText)) {
+      console.warn(`⚠️ 段落映射: 目标文本"${targetText}"不在段落中`);
       return html;
     }
     
-    // 在纯文本中进行替换
-    const beforeText = plainText.substring(0, targetIndex);
-    const afterText = plainText.substring(targetIndex + targetText.length);
-    const highlightSpan = `<span class="${className}"${fullAttributes}>${targetText}</span>`;
+    // 生成高亮标签
+    const errorIndex = attributes['data-error-index'];
+    const severity = attributes['data-severity'] || 'warning';
+    const indexBadge = errorIndex ? this.generateErrorIndexBadge(parseInt(errorIndex), severity) : '';
+    
+    const attributeString = Object.entries(attributes)
+      .map(([key, value]) => `${key}="${this.escapeHtml(value)}"`)
+      .join(' ');
+    const fullAttributes = attributeString ? ` ${attributeString}` : '';
+    
+    const highlightSpan = `<span class="${className}"${fullAttributes}>${indexBadge}${targetText}</span>`;
+    
+    // 在段落HTML中替换
+    const targetIndex = paragraphText.indexOf(targetText);
+    const beforeText = paragraphText.substring(0, targetIndex);
+    const afterText = paragraphText.substring(targetIndex + targetText.length);
     const newParagraphText = beforeText + highlightSpan + afterText;
     
-    // 用新的段落内容替换原段落的文本部分
-    let newParagraphHtml = originalParagraph.replace(plainText, newParagraphText);
-    
-    // 在完整HTML中替换段落
-    return html.replace(originalParagraph, newParagraphHtml);
+    const newParagraphHtml = targetParagraph.paragraphHtml.replace(paragraphText, newParagraphText);
+    return html.replace(targetParagraph.paragraphHtml, newParagraphHtml);
   }
   
   // 批量高亮多个位置
@@ -184,6 +345,7 @@ export class PositionMapper {
     end: number, 
     className?: string,
     errorId?: string,
+    errorIndex?: number,
     category?: string,
     severity?: string
   }>): string {
@@ -202,6 +364,9 @@ export class PositionMapper {
       // 添加错误相关属性
       if (range.errorId) {
         attributes['data-error-id'] = range.errorId;
+      }
+      if (range.errorIndex) {
+        attributes['data-error-index'] = range.errorIndex.toString();
       }
       if (range.category) {
         attributes['data-category'] = range.category;

@@ -13,6 +13,7 @@ export interface DetectionError {
   position: TextPosition;
   context: string;
   ignored?: boolean;
+  index?: number; // 错误序号，用于双向映射
 }
 
 export interface DetectionResult {

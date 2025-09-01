@@ -53,10 +53,18 @@ export const ErrorCard: React.FC<ErrorCardProps> = ({
           : 'border-gray-200 hover:border-gray-300'
       }`}
       onClick={handleCardClick}
+      data-error-id={error.id}
+      data-error-index={error.index}
     >
       {/* 头部信息 */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-2">
+          {/* 错误序号 */}
+          {error.index && (
+            <span className={`error-index ${error.severity}`}>
+              {error.index}
+            </span>
+          )}
           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${categoryInfo.color}`}>
             {categoryInfo.name}
           </span>

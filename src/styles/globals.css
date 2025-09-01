@@ -76,3 +76,44 @@
   background-color: #fecaca;
   border: 1px solid #f87171;
 }
+
+/* 错误序号显示样式 */
+.error-index {
+  display: inline-block;
+  min-width: 20px;
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
+  background-color: #ef4444;
+  color: white;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.error-index.warning {
+  background-color: #f59e0b;
+}
+
+.error-index.info {
+  background-color: #3b82f6;
+}
+
+/* 文档预览中的序号标记 */
+.highlight .error-index {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  font-size: 10px;
+  z-index: 10;
+}
+
+/* 确保高亮元素有相对定位 */
+.highlight {
+  position: relative;
+}

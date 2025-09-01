@@ -64,12 +64,16 @@ export class CheckerEngine {
       console.log('🔍 第3步: 执行检测规则');
       const allErrors = this.executeAllRules(document);
       
-      // 4. 聚合结果
-      console.log('📊 第4步: 聚合检测结果');
-      const result = this.aggregator.aggregateResults(document, allErrors);
+      // 4. 为错误分配序号（用于双向映射）
+      console.log('🔢 第4步: 为错误分配序号');
+      const errorsWithIndex = this.assignErrorIndexes(allErrors);
       
-      // 5. 生成高亮HTML
-      console.log('🎨 第5步: 生成高亮HTML');
+      // 5. 聚合结果
+      console.log('📊 第5步: 聚合检测结果');
+      const result = this.aggregator.aggregateResults(document, errorsWithIndex);
+      
+      // 6. 生成高亮HTML
+      console.log('🎨 第6步: 生成高亮HTML');
       const highlightedHtml = this.generateHighlightedHtml(document, result);
       
       console.log('✅ 文档检测完成');
@@ -104,18 +108,29 @@ export class CheckerEngine {
     return allErrors;
   }
   
+  /**
+   * 为错误分配序号，用于双向映射
+   */
+  private assignErrorIndexes(errors: DetectionError[]): DetectionError[] {
+    return errors.map((error, index) => ({
+      ...error,
+      index: index + 1 // 从1开始编号，更用户友好
+    }));
+  }
+  
   private generateHighlightedHtml(document: ParsedDocument, result: DetectionResult): string {
     console.log('🎨 生成高亮HTML...');
     
     try {
       let html = document.content.html;
       
-      // 准备高亮范围，包含错误ID
+      // 准备高亮范围，包含错误ID和序号
       const highlightRanges = result.errors.map(error => ({
         start: error.position.start,
         end: error.position.end,
         className: this.getErrorClassName(error.category, error.severity),
         errorId: error.id,
+        errorIndex: error.index, // 新增：错误序号
         category: error.category,
         severity: error.severity
       }));
