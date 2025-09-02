@@ -1,13 +1,79 @@
-import React from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useDocumentStore } from '../stores/documentStore';
 import { FileUploader } from '../components/FileUpload/FileUploader';
 import { DocumentPreview } from '../components/DocumentPreview/DocumentPreview';
 import { ErrorList } from '../components/ErrorList/ErrorList';
+import { DocumentStructurePanel } from '../components/DocumentAnalysis/DocumentStructurePanel';
 import { useSyncScroll } from '../hooks/useSyncScroll';
 
 export const MainPage: React.FC = () => {
-  const { currentDocument, detectionResult } = useDocumentStore();
-  const { handlePreviewScroll, handleErrorListScroll } = useSyncScroll();
+  const { currentDocument, detectionResult, selectedErrorId } = useDocumentStore();
+  const [structureTree, setStructureTree] = useState<any[]>([]);
+  const [documentSummary, setDocumentSummary] = useState<any>(null);
+  
+  // 双向滚动同步的引用
+  const previewRef = useRef<HTMLDivElement>(null);
+  const errorListRef = useRef<HTMLDivElement>(null);
+  const isScrollingRef = useRef(false);
+  
+  // 文档预览引用
+  const documentPreviewRef = useRef<React.ElementRef<typeof DocumentPreview>>(null);
+
+  // 监听结构分析完成事件
+  React.useEffect(() => {
+    const handleStructureAnalysis = (event: CustomEvent) => {
+      const { structureTree, summary } = event.detail;
+      setStructureTree(structureTree);
+      setDocumentSummary(summary);
+    };
+
+    window.addEventListener('structureAnalysisComplete', handleStructureAnalysis as EventListener);
+    
+    return () => {
+      window.removeEventListener('structureAnalysisComplete', handleStructureAnalysis as EventListener);
+    };
+  }, []);
+
+  // 监听错误选择变化，滚动到对应位置
+  useEffect(() => {
+    if (selectedErrorId) {
+      // 通过DOM事件触发滚动到错误位置
+      const event = new CustomEvent('scrollToError', { detail: { errorId: selectedErrorId } });
+      window.dispatchEvent(event);
+    }
+  }, [selectedErrorId]);
+
+  // 双向滚动同步实现
+  const syncScroll = useCallback((source: 'preview' | 'errorList') => {
+    if (isScrollingRef.current) return;
+
+    isScrollingRef.current = true;
+    
+    const sourceRef = source === 'preview' ? previewRef : errorListRef;
+    const targetRef = source === 'preview' ? errorListRef : previewRef;
+    
+    if (sourceRef.current && targetRef.current) {
+      const sourceElement = sourceRef.current;
+      const targetElement = targetRef.current;
+      
+      const sourceRatio = sourceElement.scrollTop / (sourceElement.scrollHeight - sourceElement.clientHeight);
+      const targetScrollTop = sourceRatio * (targetElement.scrollHeight - targetElement.clientHeight);
+      
+      targetElement.scrollTop = Math.max(0, targetScrollTop);
+    }
+
+    setTimeout(() => {
+      isScrollingRef.current = false;
+    }, 100);
+  }, []);
+
+  const handlePreviewScroll = useCallback(() => {
+    syncScroll('preview');
+  }, [syncScroll]);
+
+  const handleErrorListScroll = useCallback(() => {
+    syncScroll('errorList');
+  }, [syncScroll]);
 
   // 如果没有文档，显示上传界面
   if (!currentDocument) {
@@ -67,18 +133,23 @@ export const MainPage: React.FC = () => {
               )}
             </div>
             <div className="flex items-center space-x-4">
-              {detectionResult && (
-                <div className="text-sm text-gray-600">
-                  检测到 {detectionResult.errors.length} 个问题
-                </div>
-              )}
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                重新上传
-              </button>
+          {detectionResult && (
+            <div className="text-sm text-gray-600">
+              检测到 {detectionResult.errors.length} 个问题
             </div>
+          )}
+          {documentSummary && (
+            <div className="text-sm text-gray-600">
+              {documentSummary.totalParagraphs} 段落 · {documentSummary.totalHeadings} 标题
+            </div>
+          )}
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            重新上传
+          </button>
+        </div>
           </div>
         </div>
       </header>
@@ -86,13 +157,32 @@ export const MainPage: React.FC = () => {
       {/* 主内容区 */}
       <main className="flex-1 flex overflow-hidden">
         {/* 左侧：文档预览 */}
-        <div className="flex-1 bg-white border-r border-gray-200">
-          <DocumentPreview onScroll={handlePreviewScroll} />
+        <div 
+          ref={previewRef}
+          className="flex-1 bg-white border-r border-gray-200 overflow-y-auto"
+          onScroll={handlePreviewScroll}
+        >
+          <DocumentPreview />
         </div>
 
-        {/* 右侧：错误列表 */}
-        <div className="w-80 flex-shrink-0 bg-white">
-          <ErrorList onScroll={handleErrorListScroll} />
+        {/* 右侧：错误列表和结构分析 */}
+        <div className="w-80 flex-shrink-0 bg-white flex flex-col space-y-4">
+          <div 
+            ref={errorListRef}
+            className="flex-1 min-h-0 overflow-y-auto"
+            onScroll={handleErrorListScroll}
+          >
+            <ErrorList />
+          </div>
+          <div className="flex-shrink-0 p-4 border-t border-gray-200">
+            <DocumentStructurePanel 
+              structureTree={structureTree}
+              onNavigateToSection={(section) => {
+                // TODO: 实现跳转到指定位置的功能
+                console.log('跳转到:', section);
+              }}
+            />
+          </div>
         </div>
       </main>
     </div>

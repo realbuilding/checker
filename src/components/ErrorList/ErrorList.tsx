@@ -4,7 +4,7 @@ import { ErrorCard } from './ErrorCard';
 import { DetectionError, ErrorCategory } from '../../types/error';
 
 interface ErrorListProps {
-  onScroll?: (scrollTop: number, scrollHeight: number, clientHeight: number) => void;
+  // 滚动事件现在由父组件处理
 }
 
 export const ErrorList: React.FC<ErrorListProps> = ({ onScroll }) => {
@@ -134,7 +134,7 @@ export const ErrorList: React.FC<ErrorListProps> = ({ onScroll }) => {
 
   return (
     <div className="h-full flex flex-col">
-      {/* 头部工具栏 */}
+      {/* Header Toolbar */}
       <div className="flex-shrink-0 px-4 py-3 bg-gray-50 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-gray-700">

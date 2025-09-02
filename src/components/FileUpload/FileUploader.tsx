@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { useDocumentStore } from '../../stores/documentStore';
 import { CheckerEngine } from '../../engine/CheckerEngine';
+import { StructureAnalyzer } from '../../engine/StructureAnalyzer';
 
 interface FileUploaderProps {
   onUploadComplete?: () => void;
@@ -52,9 +53,13 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onUploadComplete }) 
       // 模拟上传进度
       setUploadProgress(10);
       
-      // 使用检测引擎处理文档
+      // 使用检测引擎处理文档（带高级功能）
       setUploadProgress(30);
-      const result = await engine.checkDocument(file);
+      const result = await engine.checkDocument(file, {
+        useAdvancedParser: true,
+        includeStructureAnalysis: true,
+        analyzeQuality: true
+      });
       
       setUploadProgress(60);
       
@@ -63,6 +68,18 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onUploadComplete }) 
       setDetectionResult(result.result);
       setHighlightedHtml(result.highlightedHtml);
       
+      // 记录结构分析结果（如果有）
+      if (result.summary) {
+        console.log('📊 文档结构摘要:', result.summary);
+      }
+      if (result.structureTree) {
+        console.log('🌳 文档结构树:', result.structureTree);
+        
+        // 触发自定义事件通知主页面
+        window.dispatchEvent(new CustomEvent('structureAnalysisComplete', {
+          detail: { structureTree: result.structureTree, summary: result.summary }
+        }));
+      }
       setUploadProgress(100);
       
       console.log('✅ 文件处理完成');
