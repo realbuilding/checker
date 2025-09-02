@@ -84,28 +84,76 @@ export class PunctuationRule extends BaseRule {
   private checkMissingSentenceEndings(text: string): DetectionError[] {
     const errors: DetectionError[] = [];
     
-    // 检测句子结尾缺少标点
-    const sentencePattern = /[^。！？.!?]\s*[\n\r]|[^。！？.!?]\s*$/g;
-    const matches = this.findAllMatches(text, sentencePattern);
+    // 将文本按行分割
+    const lines = text.split(/\r?\n/);
     
-    matches.forEach(({ start, end }) => {
-      // 排除一些特殊情况：数字、缩写等
-      const beforeText = text.substring(Math.max(0, start - 10), start + 1);
+    lines.forEach((line, lineIndex) => {
+      const trimmedLine = line.trim();
+      if (trimmedLine.length === 0) return; // 跳过空行
       
-      if (!/\d$|[A-Z]$|[一二三四五六七八九十]$/.test(beforeText.trim())) {
-        errors.push(this.createError({
-          ruleId: this.id,
-          message: '句子结尾缺少标点符号',
-          start,
-          end: start + 1,
-          severity: 'warning',
-          suggestion: '建议在句子结尾添加适当的标点符号（。！？）',
-          context: this.getContext(text, start, end)
-        }));
+      // 判断是否为标题行（通常标题行较短，且不包含逗号等分隔符）
+      const isTitle = this.isTitleLine(trimmedLine);
+      
+      if (!isTitle) {
+        // 检查正文行是否以标点符号结尾
+        const lastChar = trimmedLine[trimmedLine.length - 1];
+        const hasEndingPunctuation = /[。！？.!?]/.test(lastChar);
+        
+        if (!hasEndingPunctuation) {
+          // 计算在原文中的位置
+          const lineStartPos = this.getLineStartPosition(text, lineIndex);
+          const lineEndPos = lineStartPos + line.length;
+          
+          errors.push(this.createError({
+            ruleId: this.id,
+            message: '句子结尾缺少标点符号',
+            start: lineEndPos - 1,
+            end: lineEndPos,
+            severity: 'warning',
+            suggestion: '建议在句子结尾添加适当的标点符号（。！？）',
+            context: this.getContext(text, lineEndPos - 1, lineEndPos)
+          }));
+        }
       }
     });
     
     return errors;
+  }
+  
+  private isTitleLine(line: string): boolean {
+    // 标题行特征：
+    // 1. 长度通常较短（少于30个字符）
+    // 2. 不包含逗号、分号等分隔符
+    // 3. 可能以数字开头（如"1、标题"）
+    // 4. 不包含句号、感叹号、问号等结尾标点
+    
+    if (line.length > 30) return false;
+    
+    // 检查是否包含分隔符
+    if (/[，；：]/.test(line)) return false;
+    
+    // 检查是否以数字+顿号开头（如"1、"）
+    if (/^\d+、/.test(line)) return true;
+    
+    // 检查是否以"第X"开头
+    if (/^第[一二三四五六七八九十\d]+/.test(line)) return true;
+    
+    // 检查是否包含结尾标点（标题通常没有）
+    if (/[。！？.!?]$/.test(line)) return false;
+    
+    // 如果行较短且没有明显的正文特征，认为是标题
+    return line.length < 20;
+  }
+  
+  private getLineStartPosition(fullText: string, lineIndex: number): number {
+    const lines = fullText.split(/\r?\n/);
+    let position = 0;
+    
+    for (let i = 0; i < lineIndex; i++) {
+      position += lines[i].length + 1; // +1 for newline character
+    }
+    
+    return position;
   }
   
   private checkDuplicatePunctuation(text: string): DetectionError[] {

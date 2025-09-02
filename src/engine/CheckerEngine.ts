@@ -4,6 +4,7 @@ import { ResultAggregator } from './aggregator/ResultAggregator';
 import { PunctuationRule } from './rules/PunctuationRule';
 import { SpacingRule } from './rules/SpacingRule';
 import { ColorRule } from './rules/ColorRule';
+import { StructureRule } from './rules/StructureRule';
 import { DetectionResult, DetectionRule } from '../types/error';
 import { ParsedDocument } from '../types/document';
 
@@ -28,7 +29,8 @@ export class CheckerEngine {
     this.rules = [
       new PunctuationRule(),
       new SpacingRule(),
-      new ColorRule()
+      new ColorRule(),
+      new StructureRule()
     ];
     
     console.log(`✅ 检测引擎初始化完成，已加载 ${this.rules.length} 个检测规则`);
