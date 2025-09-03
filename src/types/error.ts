@@ -15,6 +15,11 @@ export interface DetectionError {
   ignored?: boolean;
   index?: number; // 错误序号，用于双向映射
   lineNumber?: number; // 行号，用于简化的行号高亮
+  contextPreview?: {
+    before: string; // 错误前5个字符
+    error: string;  // 错误文本本身
+    after: string;  // 错误后5个字符
+  };
 }
 
 export interface DetectionResult {

@@ -8,15 +8,9 @@ import { SpacingRule } from './rules/SpacingRule';
 import { ColorRule } from './rules/ColorRule';
 import { StructureRule } from './rules/StructureRule';
 import { NumberingRule } from './rules/NumberingRule';
-import { DetectionResult, DetectionRule } from '../types/error';
+import { DetectionResult, DetectionRule, DetectionError } from '../types/error';
 import { ParsedDocument } from '../types/document';
 import { StructureAnalyzer } from './StructureAnalyzer';
-
-interface DetectionError {
-  id: string;
-  index?: number;
-  [key: string]: any;
-}
 
 /**
  * 检测引擎主类
@@ -159,7 +153,8 @@ export class CheckerEngine {
     return errors.map((error, index) => ({
       ...error,
       index: index + 1, // 从1开始编号，更用户友好
-      lineNumber: this.calculateErrorLineNumber(error) // 计算行号
+      lineNumber: this.calculateErrorLineNumber(error), // 计算行号
+      contextPreview: this.generateContextPreview(error) // 生成上下文预览
     }));
   }
 
@@ -209,6 +204,69 @@ export class CheckerEngine {
     } catch (err) {
       console.error('❌ 计算行号失败:', err);
       return 0;
+    }
+  }
+
+  /**
+   * 生成错误的上下文预览（前5后5个字符）
+   */
+  private generateContextPreview(error: DetectionError): { before: string; error: string; after: string } | undefined {
+    try {
+      if (!this.currentDocument?.content?.text) {
+        return undefined;
+      }
+
+      const fullText = this.currentDocument.content.text;
+      const { start, end } = error.position;
+
+      // 确保位置有效
+      if (start < 0 || end > fullText.length || start >= end) {
+        return undefined;
+      }
+
+      // 提取错误文本
+      const errorText = fullText.substring(start, end);
+
+      // 提取前面5个字符（避免取到换行符和特殊字符）
+      let beforeStart = Math.max(0, start - 5);
+      let beforeText = fullText.substring(beforeStart, start);
+      
+      // 提取后面5个字符
+      let afterEnd = Math.min(fullText.length, end + 5);
+      let afterText = fullText.substring(end, afterEnd);
+
+      // 清理换行符和多余空格
+      beforeText = beforeText.replace(/\s+/g, ' ').trim();
+      afterText = afterText.replace(/\s+/g, ' ').trim();
+
+      // 如果前后文本太短，尝试扩展到词边界
+      if (beforeText.length < 3 && beforeStart > 0) {
+        let extendedStart = Math.max(0, start - 10);
+        let extendedBefore = fullText.substring(extendedStart, start);
+        beforeText = extendedBefore.replace(/\s+/g, ' ').trim();
+        if (beforeText.length > 5) {
+          beforeText = beforeText.substring(beforeText.length - 5);
+        }
+      }
+
+      if (afterText.length < 3 && afterEnd < fullText.length) {
+        let extendedEnd = Math.min(fullText.length, end + 10);
+        let extendedAfter = fullText.substring(end, extendedEnd);
+        afterText = extendedAfter.replace(/\s+/g, ' ').trim();
+        if (afterText.length > 5) {
+          afterText = afterText.substring(0, 5);
+        }
+      }
+
+      return {
+        before: beforeText || '',
+        error: errorText || '',
+        after: afterText || ''
+      };
+
+    } catch (err) {
+      console.error('❌ 生成上下文预览失败:', err);
+      return undefined;
     }
   }
   
