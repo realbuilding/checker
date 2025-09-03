@@ -156,7 +156,18 @@ export const MainPage: React.FC = () => {
 
       {/* 主内容区 */}
       <main className="flex-1 flex overflow-hidden">
-        {/* 左侧：文档预览 */}
+        {/* 最左侧：文档结构 */}
+        <div className="w-64 flex-shrink-0 bg-white border-r border-gray-200">
+          <DocumentStructurePanel 
+            structureTree={structureTree}
+            onNavigateToSection={(section) => {
+              // TODO: 实现跳转到指定位置的功能
+              console.log('跳转到:', section);
+            }}
+          />
+        </div>
+
+        {/* 中间：文档预览 */}
         <div 
           ref={previewRef}
           className="flex-1 bg-white border-r border-gray-200 overflow-y-auto"
@@ -165,23 +176,14 @@ export const MainPage: React.FC = () => {
           <DocumentPreview />
         </div>
 
-        {/* 右侧：错误列表和结构分析 */}
-        <div className="w-80 flex-shrink-0 bg-white flex flex-col space-y-4">
+        {/* 最右侧：错误列表 */}
+        <div className="w-72 flex-shrink-0 bg-white">
           <div 
             ref={errorListRef}
-            className="flex-1 min-h-0 overflow-y-auto"
+            className="h-full overflow-y-auto"
             onScroll={handleErrorListScroll}
           >
             <ErrorList />
-          </div>
-          <div className="flex-shrink-0 p-4 border-t border-gray-200">
-            <DocumentStructurePanel 
-              structureTree={structureTree}
-              onNavigateToSection={(section) => {
-                // TODO: 实现跳转到指定位置的功能
-                console.log('跳转到:', section);
-              }}
-            />
           </div>
         </div>
       </main>

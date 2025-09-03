@@ -7,6 +7,7 @@ import { PunctuationRule } from './rules/PunctuationRule';
 import { SpacingRule } from './rules/SpacingRule';
 import { ColorRule } from './rules/ColorRule';
 import { StructureRule } from './rules/StructureRule';
+import { NumberingRule } from './rules/NumberingRule';
 import { DetectionResult, DetectionRule } from '../types/error';
 import { ParsedDocument } from '../types/document';
 import { StructureAnalyzer } from './StructureAnalyzer';
@@ -43,7 +44,8 @@ export class CheckerEngine {
       new PunctuationRule(),
       new SpacingRule(),
       new ColorRule(),
-      new StructureRule()
+      new StructureRule(),
+      new NumberingRule()  // 新增：Word自动编号检测规则
     ];
     
     console.log(`✅ 检测引擎初始化完成，已加载 ${this.rules.length} 个检测规则`);
@@ -63,9 +65,17 @@ export class CheckerEngine {
     console.log('🔍 开始文档检测流程...');
     
     try {
-      // 1. 解析文档
-      console.log('📄 第1步: 解析文档');
-      const document = await this.parser.parseDocument(file);
+      // 1. 双重解析文档 - 同时使用两个解析器
+      console.log('📄 第1步: 双重解析文档');
+      console.log('  🔹 基础解析 (用于视觉渲染)');
+      const basicDocument = await this.parser.parseDocument(file);
+      
+      console.log('  🔹 高级解析 (用于结构分析和编号识别)');
+      const advancedDocument = await this.integratedParser.parseDocument(file);
+      
+      // 合并两个解析结果：使用基础解析的HTML内容，高级解析的结构信息
+      console.log('  🔗 合并解析结果');
+      const document = this.mergeParseResults(basicDocument, advancedDocument);
       
       // 2. 分析文档结构
       console.log('🗺️ 第2步: 分析文档结构');
@@ -213,6 +223,71 @@ export class CheckerEngine {
         priority: rule.priority
       }))
     };
+  }
+
+  /**
+   * 合并两个解析结果
+   * 使用基础解析的HTML内容，高级解析的结构信息和编号信息
+   */
+  private mergeParseResults(basicDocument: ParsedDocument, advancedDocument: ParsedDocument): ParsedDocument {
+    console.log('🔗 合并解析结果...');
+    
+    // 安全地获取结构信息
+    const basicStructure = basicDocument.structure || {};
+    const advancedStructure = advancedDocument.structure || {};
+    
+    // 合并编号信息：优先使用高级解析识别的编号
+    const mergedNumbering = [
+      ...(basicStructure.numbering || []),
+      ...(advancedStructure.numbering || [])
+    ];
+    
+    // 合并章节结构：使用更详细的结构
+    const mergedSections = (advancedStructure.sections?.length > 0) 
+      ? advancedStructure.sections 
+      : basicStructure.sections;
+    
+    // 合并列表结构：优先使用高级解析的列表信息
+    const mergedLists = (advancedStructure.lists?.length > 0)
+      ? advancedStructure.lists
+      : basicStructure.lists;
+    
+    const mergedDocument: ParsedDocument = {
+      ...basicDocument, // 保持基础解析的HTML内容
+      structure: {
+        ...basicStructure,
+        numbering: mergedNumbering,
+        sections: mergedSections,
+        lists: mergedLists,
+        // 合并标题信息
+        titles: [
+          ...(basicStructure.titles || []),
+          ...(advancedStructure.titles || [])
+        ].filter((title, index, array) => 
+          // 去重：基于位置和文本内容
+          array.findIndex(t => t.position?.start === title.position?.start && t.text === title.text) === index
+        )
+      },
+      // 保留基础解析的内容（用于docx-preview渲染）
+      content: basicDocument.content,
+      // 合并元数据
+      metadata: {
+        ...basicDocument.metadata,
+        ...advancedDocument.metadata,
+        // 标记使用了双重解析
+        parsingStrategy: 'dual-parser',
+        basicParserVersion: basicDocument.metadata?.parserVersion,
+        advancedParserVersion: advancedDocument.metadata?.parserVersion
+      }
+    };
+    
+    console.log('✅ 解析结果合并完成');
+    console.log(`  - 编号信息: ${mergedNumbering.length} 项`);
+    console.log(`  - 章节结构: ${mergedSections?.length || 0} 个`);
+    console.log(`  - 列表结构: ${mergedLists?.length || 0} 个`);
+    console.log(`  - 标题信息: ${mergedDocument.structure?.titles?.length || 0} 个`);
+    
+    return mergedDocument;
   }
 
   /**

@@ -80,7 +80,7 @@
 /* 错误序号显示样式 */
 .error-index {
   display: inline-block;
-  min-width: 20px;
+  width: 20px;
   height: 20px;
   line-height: 20px;
   text-align: center;
@@ -102,15 +102,17 @@
 }
 
 /* 文档预览中的序号标记 */
-.highlight .error-index {
+.error-highlight .error-index {
   position: absolute;
-  top: -8px;
-  left: -8px;
-  min-width: 16px;
-  height: 16px;
-  line-height: 16px;
-  font-size: 10px;
-  z-index: 10;
+  top: -10px;
+  left: -10px;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  font-size: 11px;
+  z-index: 15;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  border: 2px solid white;
 }
 
 /* 确保高亮元素有相对定位 */
@@ -337,20 +339,25 @@
   font-weight: 600;
 }
 
-/* 错误高亮样式 */
+/* 增强错误高亮样式 */
 .error-highlight {
   cursor: pointer;
-  border-radius: 3px;
-  padding: 2px 4px;
+  border-radius: 4px;
+  padding: 2px 6px;
   margin: 0 1px;
   transition: all 0.2s ease;
   position: relative;
   display: inline-block;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-underline-offset: 3px;
 }
 
 .error-highlight:hover {
-  transform: scale(1.02);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  transform: scale(1.03);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+  z-index: 100;
 }
 
 /* 错误类型样式 */
