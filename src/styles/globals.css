@@ -709,15 +709,58 @@
   background-color: #fef2f2;
   color: #dc2626;
   font-weight: 600;
+  border: 2px solid #ef4444;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.line-number.has-error:hover {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 .line-number.has-error::before {
   content: '⚠';
   position: absolute;
-  left: 4px;
+  left: 2px;
   top: 50%;
   transform: translateY(-50%);
   font-size: 10px;
+  color: #ef4444;
+}
+
+/* 选中的错误行号样式 */
+.line-number.selected-error {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  border: 2px solid #1d4ed8 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+  animation: pulse-selection 0.3s ease-in-out;
+}
+
+/* 行号闪烁动画（用于定位时的视觉反馈） */
+.line-number.error-flash {
+  animation: line-number-flash 0.6s ease-in-out;
+}
+
+@keyframes line-number-flash {
+  0% {
+    background-color: #fef2f2;
+    transform: scale(1);
+  }
+  50% {
+    background-color: #ef4444;
+    color: white;
+    transform: scale(1.1);
+  }
+  100% {
+    background-color: #fef2f2;
+    transform: scale(1);
+  }
 }
 
 /* 文档标题样式 */

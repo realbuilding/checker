@@ -29,6 +29,7 @@ export class CheckerEngine {
   private aggregator: ResultAggregator;
   private rules: DetectionRule[];
   private structureAnalyzer: StructureAnalyzer;
+  private currentDocument?: ParsedDocument;
   
   constructor() {
     console.log('🚀 初始化检测引擎...');
@@ -76,6 +77,9 @@ export class CheckerEngine {
       // 合并两个解析结果：使用基础解析的HTML内容，高级解析的结构信息
       console.log('  🔗 合并解析结果');
       const document = this.mergeParseResults(basicDocument, advancedDocument);
+      
+      // 设置当前文档以供行号计算使用
+      this.currentDocument = document;
       
       // 2. 分析文档结构
       console.log('🗺️ 第2步: 分析文档结构');
@@ -149,13 +153,63 @@ export class CheckerEngine {
   }
   
   /**
-   * 为错误分配序号，用于双向映射
+   * 为错误分配序号和行号，用于双向映射
    */
   private assignErrorIndexes(errors: DetectionError[]): DetectionError[] {
     return errors.map((error, index) => ({
       ...error,
-      index: index + 1 // 从1开始编号，更用户友好
+      index: index + 1, // 从1开始编号，更用户友好
+      lineNumber: this.calculateErrorLineNumber(error) // 计算行号
     }));
+  }
+
+  /**
+   * 计算错误所在的行号（简化版本，基于段落分割）
+   */
+  private calculateErrorLineNumber(error: DetectionError): number {
+    try {
+      // 从HTML内容中提取段落信息
+      const htmlContent = this.currentDocument?.content.html || '';
+      const doc = new DOMParser().parseFromString(htmlContent, 'text/html');
+      
+      // 获取所有段落元素
+      const paragraphs = Array.from(doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'))
+        .filter(el => el.textContent && el.textContent.trim().length > 0);
+      
+      // 计算累积文本长度
+      let cumulativeLength = 0;
+      
+      for (let i = 0; i < paragraphs.length; i++) {
+        const paragraphText = paragraphs[i].textContent || '';
+        const paragraphLength = paragraphText.length;
+        
+        // 检查错误位置是否在当前段落范围内
+        if (error.position.start >= cumulativeLength && 
+            error.position.start < cumulativeLength + paragraphLength) {
+          return i + 1; // 行号从1开始
+        }
+        
+        cumulativeLength += paragraphLength + 1; // +1 是为了段落间的换行符
+      }
+      
+      // 如果没有找到精确匹配，尝试通过上下文匹配
+      if (error.context) {
+        for (let i = 0; i < paragraphs.length; i++) {
+          const paragraphText = paragraphs[i].textContent || '';
+          if (paragraphText.includes(error.context.trim())) {
+            console.log(`🔍 通过上下文匹配找到第 ${i + 1} 行: "${error.context}"`);
+            return i + 1;
+          }
+        }
+      }
+      
+      console.warn(`⚠️ 无法确定错误位置对应的行号: ${error.message}`);
+      return 0;
+      
+    } catch (err) {
+      console.error('❌ 计算行号失败:', err);
+      return 0;
+    }
   }
   
   private generateHighlightedHtml(document: ParsedDocument, result: DetectionResult): string {

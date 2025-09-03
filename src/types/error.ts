@@ -14,6 +14,7 @@ export interface DetectionError {
   context: string;
   ignored?: boolean;
   index?: number; // 错误序号，用于双向映射
+  lineNumber?: number; // 行号，用于简化的行号高亮
 }
 
 export interface DetectionResult {

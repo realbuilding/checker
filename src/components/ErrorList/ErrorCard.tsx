@@ -98,7 +98,7 @@ export const ErrorCard: React.FC<ErrorCardProps> = ({
       {/* 位置信息 */}
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span>
-          位置: {error.position.start}-{error.position.end}
+          第 {error.lineNumber || '?'} 行
         </span>
         <span className="flex items-center">
           <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
