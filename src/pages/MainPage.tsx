@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useDocumentStore } from '../stores/documentStore';
 import { FileUploader } from '../components/FileUpload/FileUploader';
-import { DocumentPreview } from '../components/DocumentPreview/DocumentPreview';
+import DocumentPreview from '../components/DocumentPreview/DocumentPreview';
 import { ErrorList } from '../components/ErrorList/ErrorList';
 import { DocumentStructurePanel } from '../components/DocumentAnalysis/DocumentStructurePanel';
 import { useSyncScroll } from '../hooks/useSyncScroll';
@@ -16,8 +16,8 @@ export const MainPage: React.FC = () => {
   const errorListRef = useRef<HTMLDivElement>(null);
   const isScrollingRef = useRef(false);
   
-  // 文档预览引用
-  const documentPreviewRef = useRef<React.ElementRef<typeof DocumentPreview>>(null);
+  // 文档预览引用 - 暂时不需要，因为使用事件通信
+  // const documentPreviewRef = useRef<any>(null);
 
   // 监听结构分析完成事件
   React.useEffect(() => {

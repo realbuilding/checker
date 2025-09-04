@@ -159,104 +159,106 @@ export class CheckerEngine {
   }
 
   /**
-   * 计算错误所在的行号（简化版本，基于段落分割）
+   * 计算错误所在的段落号 - 基于Word文档段落结构
    */
   private calculateErrorLineNumber(error: DetectionError): number {
     try {
-      // 从HTML内容中提取段落信息
-      const htmlContent = this.currentDocument?.content.html || '';
-      const doc = new DOMParser().parseFromString(htmlContent, 'text/html');
+      if (!this.currentDocument?.structure?.paragraphs || !this.currentDocument?.content?.text) {
+        console.warn('⚠️ 无法获取文档段落结构');
+        return 0;
+      }
+
+      const paragraphs = this.currentDocument.structure.paragraphs;
+      const { start } = error.position;
       
-      // 获取所有段落元素
-      const paragraphs = Array.from(doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'))
-        .filter(el => el.textContent && el.textContent.trim().length > 0);
+      // 基于段落结构计算段落号
+      let paragraphNumber = 0;
       
-      // 计算累积文本长度
-      let cumulativeLength = 0;
-      
+      // 遍历段落，找到错误所在的段落
       for (let i = 0; i < paragraphs.length; i++) {
-        const paragraphText = paragraphs[i].textContent || '';
-        const paragraphLength = paragraphText.length;
-        
-        // 检查错误位置是否在当前段落范围内
-        if (error.position.start >= cumulativeLength && 
-            error.position.start < cumulativeLength + paragraphLength) {
-          return i + 1; // 行号从1开始
-        }
-        
-        cumulativeLength += paragraphLength + 1; // +1 是为了段落间的换行符
-      }
-      
-      // 如果没有找到精确匹配，尝试通过上下文匹配
-      if (error.context) {
-        for (let i = 0; i < paragraphs.length; i++) {
-          const paragraphText = paragraphs[i].textContent || '';
-          if (paragraphText.includes(error.context.trim())) {
-            console.log(`🔍 通过上下文匹配找到第 ${i + 1} 行: "${error.context}"`);
-            return i + 1;
-          }
+        const paragraph = paragraphs[i];
+        if (start >= paragraph.startIndex && start <= paragraph.endIndex) {
+          paragraphNumber = i + 1; // 段落号从1开始
+          break;
         }
       }
       
-      console.warn(`⚠️ 无法确定错误位置对应的行号: ${error.message}`);
-      return 0;
+      console.log(`📍 计算段落号: ${paragraphNumber} (字符位置: ${start})`);
+      return paragraphNumber;
       
     } catch (err) {
-      console.error('❌ 计算行号失败:', err);
+      console.error('❌ 计算段落号失败:', err);
       return 0;
     }
   }
 
   /**
-   * 生成错误的上下文预览（前5后5个字符）
+   * 生成错误的上下文预览（确保段落号与预览文本一致）
    */
   private generateContextPreview(error: DetectionError): { before: string; error: string; after: string } | undefined {
     try {
-      if (!this.currentDocument?.content?.text) {
+      if (!this.currentDocument?.content?.text || !this.currentDocument?.structure?.paragraphs) {
         return undefined;
       }
 
       const fullText = this.currentDocument.content.text;
       const { start, end } = error.position;
+      const lineNumber = error.lineNumber || 0;
 
       // 确保位置有效
-      if (start < 0 || end > fullText.length || start >= end) {
+      if (start < 0 || end > fullText.length || start >= end || lineNumber <= 0) {
         return undefined;
       }
 
-      // 提取错误文本
-      const errorText = fullText.substring(start, end);
+      // 直接使用段落号对应的段落，确保一致性
+      const paragraphs = this.currentDocument.structure.paragraphs;
+      const targetParagraph = paragraphs[lineNumber - 1]; // 数组索引从0开始
 
-      // 提取前面5个字符（避免取到换行符和特殊字符）
-      let beforeStart = Math.max(0, start - 5);
-      let beforeText = fullText.substring(beforeStart, start);
+      if (!targetParagraph) {
+        console.warn(`⚠️ 未找到第${lineNumber}段对应的段落信息`);
+        return undefined;
+      }
+
+      // 提取错误文本（确保使用正确的段落文本）
+      const paragraphText = targetParagraph.text;
       
-      // 提取后面5个字符
-      let afterEnd = Math.min(fullText.length, end + 5);
-      let afterText = fullText.substring(end, afterEnd);
+      // 重新计算在段落内的相对位置
+      // 使用段落边界重新映射位置
+      const paragraphStart = targetParagraph.startIndex;
+      const paragraphEnd = targetParagraph.endIndex;
+      
+      // 确保错误位置在段落范围内
+      if (start < paragraphStart || start > paragraphEnd) {
+        console.warn(`⚠️ 错误位置${start}不在第${lineNumber}段范围内[${paragraphStart}-${paragraphEnd}]`);
+        return this.generateFallbackContext(error);
+      }
 
-      // 清理换行符和多余空格
+      const relativeStart = start - paragraphStart;
+      const relativeEnd = Math.min(end - paragraphStart, paragraphText.length);
+      
+      // 提取实际错误文本
+      const errorText = paragraphText.substring(relativeStart, relativeEnd);
+
+      // 提取段落内的上下文（确保不超过段落边界）
+      const contextStart = Math.max(0, relativeStart - 15);
+      const contextEnd = Math.min(paragraphText.length, relativeEnd + 15);
+
+      let beforeText = paragraphText.substring(contextStart, relativeStart);
+      let afterText = paragraphText.substring(relativeEnd, contextEnd);
+
+      // 清理换行符和多余空格，但保留基本格式
       beforeText = beforeText.replace(/\s+/g, ' ').trim();
       afterText = afterText.replace(/\s+/g, ' ').trim();
 
-      // 如果前后文本太短，尝试扩展到词边界
-      if (beforeText.length < 3 && beforeStart > 0) {
-        let extendedStart = Math.max(0, start - 10);
-        let extendedBefore = fullText.substring(extendedStart, start);
-        beforeText = extendedBefore.replace(/\s+/g, ' ').trim();
-        if (beforeText.length > 5) {
-          beforeText = beforeText.substring(beforeText.length - 5);
-        }
+      // 限制长度并添加省略号
+      if (beforeText.length > 20) {
+        beforeText = '...' + beforeText.substring(beforeText.length - 20);
+      }
+      if (afterText.length > 20) {
+        afterText = afterText.substring(0, 20) + '...';
       }
 
-      if (afterText.length < 3 && afterEnd < fullText.length) {
-        let extendedEnd = Math.min(fullText.length, end + 10);
-        let extendedAfter = fullText.substring(end, extendedEnd);
-        afterText = extendedAfter.replace(/\s+/g, ' ').trim();
-        if (afterText.length > 5) {
-          afterText = afterText.substring(0, 5);
-        }
-      }
+      console.log(`✅ 第${lineNumber}段上下文预览: "${beforeText}【${errorText}】${afterText}"`);
 
       return {
         before: beforeText || '',
@@ -266,6 +268,45 @@ export class CheckerEngine {
 
     } catch (err) {
       console.error('❌ 生成上下文预览失败:', err);
+      return this.generateFallbackContext(error);
+    }
+  }
+
+  /**
+   * 生成回退的上下文预览（当主方法失败时使用）
+   */
+  private generateFallbackContext(error: DetectionError): { before: string; error: string; after: string } | undefined {
+    try {
+      if (!this.currentDocument?.content?.text) {
+        return undefined;
+      }
+
+      const fullText = this.currentDocument.content.text;
+      const { start, end } = error.position;
+
+      const errorText = fullText.substring(start, end);
+      const contextLength = 15;
+      
+      const beforeStart = Math.max(0, start - contextLength);
+      const afterEnd = Math.min(fullText.length, end + contextLength);
+
+      let beforeText = fullText.substring(beforeStart, start);
+      let afterText = fullText.substring(end, afterEnd);
+
+      // 清理和限制长度
+      beforeText = beforeText.replace(/\s+/g, ' ').trim();
+      afterText = afterText.replace(/\s+/g, ' ').trim();
+
+      if (beforeText.length > 20) beforeText = '...' + beforeText.substring(beforeText.length - 20);
+      if (afterText.length > 20) afterText = afterText.substring(0, 20) + '...';
+
+      return {
+        before: beforeText || '',
+        error: errorText || '',
+        after: afterText || ''
+      };
+    } catch (err) {
+      console.error('❌ 回退上下文预览失败:', err);
       return undefined;
     }
   }

@@ -763,6 +763,91 @@
   }
 }
 
+/* 成功匹配的行号样式 */
+.line-number.error-matched {
+  position: relative;
+  background-color: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #0ea5e9;
+  font-weight: 600;
+}
+
+.line-number.error-matched::after {
+  content: attr(data-error-index);
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #3b82f6;
+  color: white;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 50%;
+  min-width: 16px;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* 段落高亮样式 */
+.paragraph-highlight {
+  position: relative;
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 4px solid #3b82f6;
+  padding-left: 8px;
+  transition: all 0.3s ease;
+}
+
+.paragraph-highlight::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(to bottom, #3b82f6, #1d4ed8);
+  animation: paragraph-pulse 1s ease-in-out infinite;
+}
+
+@keyframes paragraph-pulse {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 映射调试信息样式 */
+.mapping-debug {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-width: 300px;
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 1000;
+  font-size: 12px;
+}
+
+.mapping-debug h4 {
+  margin: 0 0 8px 0;
+  color: #374151;
+  font-weight: 600;
+}
+
+.mapping-debug .mapping-item {
+  padding: 4px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.mapping-debug .mapping-item:last-child {
+  border-bottom: none;
+}
+
 /* 文档标题样式 */
 .docx-wrapper .document-title {
   text-align: center !important;

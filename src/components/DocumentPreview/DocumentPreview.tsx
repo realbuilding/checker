@@ -6,7 +6,7 @@ interface DocumentPreviewProps {
   // 滚动事件现在由父组件处理
 }
 
-export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
+const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const docxContainerRef = useRef<HTMLDivElement>(null);
   const [isDocxLoaded, setIsDocxLoaded] = useState(false);
@@ -22,7 +22,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     highlightedHtml
   } = useDocumentStore();
 
-  // 添加行号
+  // 添加行号到文档预览 - 基于实际Word文档行号
   const addLineNumbers = useCallback(() => {
     if (!docxContainerRef.current) return;
     
@@ -30,8 +30,8 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     const oldNumbers = docxContainerRef.current.querySelectorAll('.line-number-container');
     oldNumbers.forEach(el => el.remove());
     
-    // 获取所有段落
-    const paragraphs = Array.from(docxContainerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'))
+    // 获取文档全文内容
+    const allElements = Array.from(docxContainerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div[style*="margin"], div[class*="paragraph"]'))
       .filter(el => {
         const style = window.getComputedStyle(el);
         const rect = el.getBoundingClientRect();
@@ -41,10 +41,16 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
                (el.textContent || '').trim().length > 0;
       });
     
-    if (paragraphs.length === 0) {
-      console.warn('⚠️ 未找到段落元素');
+    if (allElements.length === 0) {
+      console.warn('⚠️ 未找到任何段落元素，无法添加行号');
       return;
     }
+    
+    // 构建全文内容以计算实际行号
+    const fullText = allElements.map(el => el.textContent || '').join('\n');
+    const lines = fullText.split(/\r?\n/).filter(line => line.trim().length > 0);
+    
+    console.log(`📋 文档共有 ${lines.length} 行实际内容，准备添加行号...`);
     
     const container = docxContainerRef.current;
     const containerRect = container.getBoundingClientRect();
@@ -56,18 +62,29 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
       position: absolute;
       left: 0;
       top: 0;
-      width: 50px;
+      width: 60px;
       height: 100%;
       pointer-events: none;
       z-index: 10;
     `;
     
-    // 添加行号
-    paragraphs.forEach((p, index) => {
-      const rect = p.getBoundingClientRect();
+    // 为每个可见元素计算对应的实际行号范围
+    let currentLineOffset = 1;
+    allElements.forEach((element, elementIndex) => {
+      const rect = element.getBoundingClientRect();
+      const elementText = element.textContent || '';
+      const elementLines = elementText.split(/\r?\n/).filter(line => line.trim().length > 0);
+      
+      // 计算该元素的起始行号
+      const startLine = currentLineOffset;
+      const endLine = currentLineOffset + elementLines.length - 1;
+      
+      // 为主要行号添加标记
       const lineNumber = document.createElement('div');
       lineNumber.className = 'line-number';
-      lineNumber.textContent = (index + 1).toString();
+      lineNumber.textContent = startLine.toString();
+      lineNumber.setAttribute('data-start-line', startLine.toString());
+      lineNumber.setAttribute('data-end-line', endLine.toString());
       lineNumber.style.cssText = `
         position: absolute;
         left: 10px;
@@ -80,15 +97,18 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
         font-size: 12px;
         color: #666;
         font-family: 'Courier New', monospace;
+        border-right: 1px solid #eee;
       `;
       lineNumberContainer.appendChild(lineNumber);
+      
+      currentLineOffset += elementLines.length;
     });
     
     container.style.position = 'relative';
     container.appendChild(lineNumberContainer);
     
-    console.log(`✅ 添加了 ${paragraphs.length} 个行号`);
-  }, []);
+    console.log(`✅ 添加了基于实际行号的行号显示，共 ${lines.length} 行`);
+  }, [currentDocument]);
 
   // 增强编号显示 - 补充docx-preview可能丢失的Word自动编号
   const enhanceNumberingDisplay = useCallback(() => {
@@ -208,7 +228,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     }
   }, [currentFile, renderDocx]);
 
-  // 简化的行号高亮算法
+  // 增强的行号高亮算法 - 添加可视化对应
   const highlightErrorLines = useCallback(() => {
     if (!docxContainerRef.current || !detectionResult) return;
     
@@ -217,13 +237,14 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     // 清除之前的行号高亮
     const lineNumbers = docxContainerRef.current.querySelectorAll('.line-number');
     lineNumbers.forEach(el => {
-      el.classList.remove('has-error', 'selected-error');
+      el.classList.remove('has-error', 'selected-error', 'error-matched');
       el.removeAttribute('data-error-id');
       el.removeAttribute('data-error-index');
+      el.removeAttribute('title');
     });
     
     // 获取所有段落元素
-    const paragraphs = Array.from(docxContainerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'))
+    const paragraphs = Array.from(docxContainerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div[style*="margin"], div[class*="paragraph"]'))
       .filter(el => {
         const style = window.getComputedStyle(el);
         const rect = el.getBoundingClientRect();
@@ -234,6 +255,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     });
     
     let successCount = 0;
+    let mappingLog = [];
     
     // 为每个错误计算行号并高亮对应的行号
     detectionResult.errors.forEach((error, index) => {
@@ -242,63 +264,64 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
         // 更新错误对象的行号
         error.lineNumber = lineNumber;
         
-        // 高亮对应的行号元素 - 修复选择器
+        // 高亮对应的行号元素
         const lineNumbers = docxContainerRef.current?.querySelectorAll('.line-number-container .line-number');
         const lineNumberEl = lineNumbers ? lineNumbers[lineNumber - 1] : null;
         
         if (lineNumberEl) {
-          lineNumberEl.classList.add('has-error');
+          lineNumberEl.classList.add('has-error', 'error-matched');
           lineNumberEl.setAttribute('data-error-id', error.id);
           lineNumberEl.setAttribute('data-error-index', (index + 1).toString());
-        successCount++;
-          console.log(`✅ 已高亮第 ${lineNumber} 行: ${error.message}`);
+          lineNumberEl.setAttribute('title', `问题 ${index + 1}: ${error.message}`);
+          
+          successCount++;
+          mappingLog.push({
+            errorIndex: index + 1,
+            errorId: error.id,
+            lineNumber: lineNumber,
+            message: error.message.substring(0, 50) + '...'
+          });
+          
+          console.log(`✅ 已映射: 问题${index + 1} -> 第${lineNumber}行: ${error.message}`);
         }
+      } else {
+        console.warn(`⚠️ 未映射: 问题${index + 1} "${error.message}" 无法找到对应行`);
       }
     });
     
-    console.log(`✅ 行号高亮处理完成: 成功${successCount}个, 失败${detectionResult.errors.length - successCount}个`);
+    // 输出映射关系供调试
+    console.table(mappingLog);
+    console.log(`✅ 行号高亮处理完成: 成功${successCount}/${detectionResult.errors.length}个映射`);
   }, [detectionResult]);
 
-  // 计算错误所在的行号
+  // 计算错误所在的行号 - 基于段落号的简单映射
   const calculateLineNumber = (error: any, paragraphs: Element[]): number => {
     if (!error.position || !paragraphs.length) return 0;
     
-    // 获取文档的累积文本长度
+    // 统一使用段落号作为行号，保持两边一致
+    // 基于错误位置找到对应的段落索引
+    const errorPosition = error.position.start;
+    
+    // 计算累计字符位置，找到对应的段落
     let cumulativeLength = 0;
-    
     for (let i = 0; i < paragraphs.length; i++) {
-      const paragraph = paragraphs[i];
-      const paragraphText = paragraph.textContent || '';
-      const paragraphLength = paragraphText.length;
+      const paragraphText = paragraphs[i].textContent || '';
+      cumulativeLength += paragraphText.length + 1; // +1 用于换行符
       
-      // 检查错误位置是否在当前段落范围内
-      if (error.position.start >= cumulativeLength && 
-          error.position.start < cumulativeLength + paragraphLength) {
-        return i + 1; // 行号从1开始
-      }
-      
-      cumulativeLength += paragraphLength + 1; // +1 是为了段落间的换行符
-    }
-    
-    // 如果没有找到精确匹配，尝试通过上下文匹配
-    if (error.context) {
-      for (let i = 0; i < paragraphs.length; i++) {
-        const paragraph = paragraphs[i];
-        const paragraphText = paragraph.textContent || '';
-        
-        // 如果错误的上下文能够在某个段落中找到
-        if (paragraphText.includes(error.context.trim())) {
-          console.log(`🔍 通过上下文匹配找到第 ${i + 1} 行: "${error.context}"`);
-          return i + 1;
-        }
+      if (cumulativeLength >= errorPosition) {
+        const paragraphNumber = i + 1; // 段落号从1开始
+        console.log(`📍 基于段落号计算行号: ${paragraphNumber} (段落 ${i}, 位置: ${errorPosition})`);
+        return paragraphNumber;
       }
     }
     
-    console.warn(`⚠️ 无法确定错误位置对应的行号: ${error.message}`);
-    return 0;
+    // 如果找不到对应段落，返回最后一个段落
+    const paragraphNumber = paragraphs.length;
+    console.log(`📍 使用最后一个段落号: ${paragraphNumber}`);
+    return paragraphNumber;
   };
 
-  // 滚动到指定错误位置
+  // 滚动到指定错误位置 - 增强版
   const scrollToError = useCallback((errorId: string) => {
     if (!containerRef.current || !detectionResult) return;
     
@@ -309,6 +332,10 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     }
     
     console.log(`🎯 开始定位错误: ${error.message} (第${error.lineNumber}行)`);
+    
+    // 清除之前的高亮
+    const prevHighlights = containerRef.current.querySelectorAll('.paragraph-highlight');
+    prevHighlights.forEach(el => el.classList.remove('paragraph-highlight'));
     
     // 查找对应的行号元素
     const lineNumberEl = containerRef.current.querySelector(`.line-number[data-error-id="${errorId}"]`) as HTMLElement;
@@ -322,7 +349,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
       // 找到对应的段落元素进行滚动
       const lineNumber = error.lineNumber;
       if (lineNumber) {
-        const paragraphs = Array.from(containerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'))
+        const paragraphs = Array.from(containerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div[style*="margin"], div[class*="paragraph"]'))
           .filter(el => {
             const style = window.getComputedStyle(el);
             const rect = el.getBoundingClientRect();
@@ -334,25 +361,36 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
         
         const targetParagraph = paragraphs[lineNumber - 1]; // 行号从1开始，数组从0开始
         if (targetParagraph) {
+          // 添加段落高亮
+          targetParagraph.classList.add('paragraph-highlight');
+          
+          // 滚动到段落
           targetParagraph.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-        inline: 'nearest'
-      });
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'nearest'
+          });
+          
+          console.log(`✅ 已滚动到第 ${error.lineNumber} 行并高亮段落`);
+          
+          // 3秒后移除高亮效果
+          setTimeout(() => {
+            targetParagraph.classList.remove('paragraph-highlight');
+          }, 3000);
         }
       }
       
-      // 移除闪烁效果
+      // 移除行号闪烁效果
       setTimeout(() => {
         lineNumberEl.classList.remove('error-flash');
       }, 2000);
       
-      console.log(`✅ 已滚动到第 ${error.lineNumber} 行: ${error.message}`);
     } else {
       console.warn(`⚠️ 未找到行号元素，错误ID: ${errorId}`);
+      
       // 尝试通过行号直接定位
       if (error.lineNumber) {
-        const paragraphs = Array.from(containerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'))
+        const paragraphs = Array.from(containerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div[style*="margin"], div[class*="paragraph"]'))
           .filter(el => {
             const style = window.getComputedStyle(el);
             const rect = el.getBoundingClientRect();
@@ -365,15 +403,22 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
         const targetParagraph = paragraphs[error.lineNumber - 1];
         if (targetParagraph) {
           console.log(`✅ 通过行号找到段落，开始滚动`);
+          
+          // 添加段落高亮
+          targetParagraph.classList.add('paragraph-highlight');
+          
           targetParagraph.scrollIntoView({
             behavior: 'smooth',
             block: 'center',
             inline: 'nearest'
           });
-          targetParagraph.classList.add('error-flash');
+          
+          // 3秒后移除高亮效果
           setTimeout(() => {
-            targetParagraph.classList.remove('error-flash');
-          }, 2000);
+            targetParagraph.classList.remove('paragraph-highlight');
+          }, 3000);
+        } else {
+          console.warn(`⚠️ 未找到第 ${error.lineNumber} 行的段落元素`);
         }
       }
     }
@@ -384,7 +429,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     if (selectedErrorId) {
       scrollToError(selectedErrorId);
     }
-  }, [selectedErrorId, scrollToError]);
+  }, [selectedErrorId]);
 
   // 监听外部滚动到错误的事件
   useEffect(() => {
@@ -398,7 +443,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     return () => {
       window.removeEventListener('scrollToError', handleScrollToError as EventListener);
     };
-  }, [scrollToError]);
+  }, []);
 
   // 当检测结果变化时，高亮错误行号
   useEffect(() => {
@@ -407,7 +452,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
         highlightErrorLines();
       }, 100);
     }
-  }, [detectionResult, isDocxLoaded, highlightErrorLines]);
+  }, [detectionResult, isDocxLoaded]);
 
   // 监听选中错误变化，更新行号的选中状态
   useEffect(() => {
@@ -522,3 +567,5 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     </div>
   );
 };
+
+export default DocumentPreview;

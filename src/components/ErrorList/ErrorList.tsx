@@ -33,12 +33,9 @@ export const ErrorList: React.FC<ErrorListProps> = ({ onScroll }) => {
       errors = errors.filter(e => e.category === selectedCategory);
     }
 
-    // 按严重性和位置排序
+    // 按在文档中出现的顺序（段落号）排序
     return errors.sort((a, b) => {
-      const severityOrder = { error: 3, warning: 2, info: 1 };
-      const severityDiff = (severityOrder[b.severity] || 0) - (severityOrder[a.severity] || 0);
-      if (severityDiff !== 0) return severityDiff;
-      return a.position.start - b.position.start;
+      return a.lineNumber - b.lineNumber;
     });
   }, [detectionResult, showIgnored, selectedCategory, ignoredErrors]);
 
