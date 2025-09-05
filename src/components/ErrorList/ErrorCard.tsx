@@ -61,9 +61,9 @@ export const ErrorCard: React.FC<ErrorCardProps> = ({
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-2">
           {/* 错误序号 */}
-          {error.index && (
+          {error.displayIndex && (
             <span className={`error-index ${error.severity}`}>
-              {error.index}
+              {error.displayIndex}
             </span>
           )}
           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${categoryInfo.color}`}>

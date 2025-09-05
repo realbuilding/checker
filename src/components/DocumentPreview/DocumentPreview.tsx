@@ -321,108 +321,189 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     return paragraphNumber;
   };
 
-  // 滚动到指定错误位置 - 增强版
+  // 滚动到指定错误位置 - 调试增强版
   const scrollToError = useCallback((errorId: string) => {
-    if (!containerRef.current || !detectionResult) return;
+    console.group('🔍 滚动到错误调试信息');
+    console.log('错误ID:', errorId);
+    console.log('文档加载状态:', isDocxLoaded);
+    console.log('检测结果:', detectionResult ? `${detectionResult.errors.length}个错误` : '无');
     
+    if (!containerRef.current || !detectionResult) {
+      console.warn('❌ 容器或检测结果不可用');
+      console.groupEnd();
+      return;
+    }
+
     const error = detectionResult.errors.find(e => e.id === errorId);
     if (!error) {
       console.warn(`⚠️ 未找到错误ID: ${errorId}`);
+      console.groupEnd();
       return;
     }
-    
-    console.log(`🎯 开始定位错误: ${error.message} (第${error.lineNumber}行)`);
-    
+
+    console.log('目标错误:', {
+      id: error.id,
+      message: error.message,
+      lineNumber: error.lineNumber,
+      position: error.position
+    });
+
+    // 检查容器状态
+    const container = containerRef.current;
+    console.log('容器元素:', {
+      exists: !!container,
+      childrenCount: container.children.length,
+      hasLineNumbers: container.querySelectorAll('.line-number').length,
+      hasErrorLineNumbers: container.querySelectorAll('.line-number[data-error-id]').length
+    });
+
     // 清除之前的高亮
-    const prevHighlights = containerRef.current.querySelectorAll('.paragraph-highlight');
+    const prevHighlights = container.querySelectorAll('.paragraph-highlight');
     prevHighlights.forEach(el => el.classList.remove('paragraph-highlight'));
-    
-    // 查找对应的行号元素
-    const lineNumberEl = containerRef.current.querySelector(`.line-number[data-error-id="${errorId}"]`) as HTMLElement;
-    
-    if (lineNumberEl) {
-      console.log(`✅ 找到行号元素，开始滚动定位`);
+
+    // 重试机制：确保元素已加载
+    const maxRetries = 5;
+    let retryCount = 0;
+
+    const attemptScroll = () => {
+      // 查找对应的行号元素
+      const lineNumberEl = container.querySelector(`.line-number[data-error-id="${errorId}"]`) as HTMLElement;
       
-      // 立即添加闪烁效果
-      lineNumberEl.classList.add('error-flash');
-      
-      // 找到对应的段落元素进行滚动
-      const lineNumber = error.lineNumber;
-      if (lineNumber) {
-        const paragraphs = Array.from(containerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div[style*="margin"], div[class*="paragraph"]'))
-          .filter(el => {
-            const style = window.getComputedStyle(el);
-            const rect = el.getBoundingClientRect();
-            return style.display !== 'none' && 
-                   style.visibility !== 'hidden' && 
-                   rect.height > 0 && 
-                   (el.textContent || '').trim().length > 0;
-          });
+      console.log(`第${retryCount + 1}次尝试 - 行号元素:`, {
+        found: !!lineNumberEl,
+        allLineNumbers: container.querySelectorAll('.line-number').length,
+        errorLineNumbers: container.querySelectorAll('.line-number[data-error-id]').length
+      });
+
+      if (lineNumberEl) {
+        console.log('✅ 找到行号元素，开始滚动定位');
         
-        const targetParagraph = paragraphs[lineNumber - 1]; // 行号从1开始，数组从0开始
-        if (targetParagraph) {
-          // 添加段落高亮
-          targetParagraph.classList.add('paragraph-highlight');
-          
-          // 滚动到段落
-          targetParagraph.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-            inline: 'nearest'
-          });
-          
-          console.log(`✅ 已滚动到第 ${error.lineNumber} 行并高亮段落`);
-          
-          // 3秒后移除高亮效果
-          setTimeout(() => {
-            targetParagraph.classList.remove('paragraph-highlight');
-          }, 3000);
-        }
-      }
-      
-      // 移除行号闪烁效果
-      setTimeout(() => {
-        lineNumberEl.classList.remove('error-flash');
-      }, 2000);
-      
-    } else {
-      console.warn(`⚠️ 未找到行号元素，错误ID: ${errorId}`);
-      
-      // 尝试通过行号直接定位
-      if (error.lineNumber) {
-        const paragraphs = Array.from(containerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div[style*="margin"], div[class*="paragraph"]'))
-          .filter(el => {
-            const style = window.getComputedStyle(el);
-            const rect = el.getBoundingClientRect();
-            return style.display !== 'none' && 
-                   style.visibility !== 'hidden' && 
-                   rect.height > 0 && 
-                   (el.textContent || '').trim().length > 0;
-          });
+        // 立即添加闪烁效果
+        lineNumberEl.classList.add('error-flash');
         
-        const targetParagraph = paragraphs[error.lineNumber - 1];
-        if (targetParagraph) {
-          console.log(`✅ 通过行号找到段落，开始滚动`);
+        // 找到对应的段落元素进行滚动
+        const lineNumber = error.lineNumber;
+        if (lineNumber) {
+          const paragraphs = Array.from(container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div[style*="margin"], div[class*="paragraph"]'))
+            .filter(el => {
+              const style = window.getComputedStyle(el);
+              const rect = el.getBoundingClientRect();
+              return style.display !== 'none' && 
+                     style.visibility !== 'hidden' && 
+                     rect.height > 0 && 
+                     (el.textContent || '').trim().length > 0;
+            });
           
-          // 添加段落高亮
-          targetParagraph.classList.add('paragraph-highlight');
-          
-          targetParagraph.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-            inline: 'nearest'
+          console.log('段落统计:', {
+            totalParagraphs: paragraphs.length,
+            targetIndex: lineNumber - 1,
+            targetExists: lineNumber - 1 < paragraphs.length
           });
-          
-          // 3秒后移除高亮效果
-          setTimeout(() => {
-            targetParagraph.classList.remove('paragraph-highlight');
-          }, 3000);
-        } else {
-          console.warn(`⚠️ 未找到第 ${error.lineNumber} 行的段落元素`);
+
+          const targetParagraph = paragraphs[lineNumber - 1];
+          if (targetParagraph) {
+            console.log('✅ 找到目标段落，开始滚动');
+            
+            // 添加段落高亮
+            targetParagraph.classList.add('paragraph-highlight');
+            
+            // 滚动到段落
+            targetParagraph.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+              inline: 'nearest'
+            });
+            
+            console.log('✅ 滚动完成');
+            
+            // 3秒后移除高亮效果
+            setTimeout(() => {
+              targetParagraph.classList.remove('paragraph-highlight');
+            }, 3000);
+          } else {
+            console.warn('⚠️ 未找到目标段落');
+          }
         }
+        
+        // 移除行号闪烁效果
+        setTimeout(() => {
+          lineNumberEl.classList.remove('error-flash');
+        }, 2000);
+        
+        console.groupEnd();
+        return true;
+      } else {
+        console.warn(`⚠️ 未找到行号元素 (重试 ${retryCount + 1}/${maxRetries})`);
+        return false;
       }
+    };
+
+    // 立即尝试一次
+    if (attemptScroll()) {
+      console.groupEnd();
+      return;
     }
-  }, [detectionResult]);
+
+    // 如果失败，启动重试机制
+    const retryInterval = setInterval(() => {
+      retryCount++;
+      
+      console.log(`🔁 重试 ${retryCount}/${maxRetries}`);
+      
+      // 尝试重新高亮行号
+      if (isDocxLoaded && detectionResult) {
+        console.log('🔄 重新高亮行号...');
+        highlightErrorLines();
+      }
+
+      if (attemptScroll()) {
+        clearInterval(retryInterval);
+        console.groupEnd();
+        return;
+      }
+
+      if (retryCount >= maxRetries) {
+        clearInterval(retryInterval);
+        console.warn(`❌ 重试${maxRetries}次失败，尝试直接滚动到段落`);
+        
+        // 最终方案：直接通过行号滚动到段落
+        if (error.lineNumber) {
+          const paragraphs = Array.from(container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div[style*="margin"], div[class*="paragraph"]'))
+            .filter(el => {
+              const style = window.getComputedStyle(el);
+              const rect = el.getBoundingClientRect();
+              return style.display !== 'none' && 
+                     style.visibility !== 'hidden' && 
+                     rect.height > 0 && 
+                     (el.textContent || '').trim().length > 0;
+            });
+          
+          const targetParagraph = paragraphs[error.lineNumber - 1];
+          if (targetParagraph) {
+            console.log('✅ 直接滚动到段落');
+            
+            // 添加段落高亮
+            targetParagraph.classList.add('paragraph-highlight');
+            
+            targetParagraph.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+              inline: 'nearest'
+            });
+            
+            // 3秒后移除高亮效果
+            setTimeout(() => {
+              targetParagraph.classList.remove('paragraph-highlight');
+            }, 3000);
+          } else {
+            console.warn('⚠️ 最终方案也失败');
+          }
+        }
+        console.groupEnd();
+      }
+    }, 500);
+
+  }, [detectionResult, isDocxLoaded, highlightErrorLines]);
 
   // 监听错误选择变化，滚动到对应位置
   useEffect(() => {
@@ -445,14 +526,29 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = () => {
     };
   }, []);
 
-  // 当检测结果变化时，高亮错误行号
+  // 当检测结果变化时，高亮错误行号 - 增强版
   useEffect(() => {
     if (detectionResult && isDocxLoaded) {
+      // 立即执行，减少延迟
+      setTimeout(() => {
+        highlightErrorLines();
+      }, 50);
+      
+      // 额外再延迟一次，确保DOM完全就绪
+      setTimeout(() => {
+        highlightErrorLines();
+      }, 300);
+    }
+  }, [detectionResult, isDocxLoaded]);
+
+  // 监听文档加载完成，立即高亮行号
+  useEffect(() => {
+    if (isDocxLoaded && detectionResult) {
       setTimeout(() => {
         highlightErrorLines();
       }, 100);
     }
-  }, [detectionResult, isDocxLoaded]);
+  }, [isDocxLoaded, detectionResult, highlightErrorLines]);
 
   // 监听选中错误变化，更新行号的选中状态
   useEffect(() => {

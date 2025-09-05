@@ -33,10 +33,16 @@ export const ErrorList: React.FC<ErrorListProps> = ({ onScroll }) => {
       errors = errors.filter(e => e.category === selectedCategory);
     }
 
-    // 按在文档中出现的顺序（段落号）排序
-    return errors.sort((a, b) => {
+    // 按在文档中出现的顺序（段落号）排序 - 增强版
+    const sortedErrors = errors.sort((a, b) => {
       return a.lineNumber - b.lineNumber;
     });
+    
+    // 添加序号信息用于显示
+    return sortedErrors.map((error, index) => ({
+      ...error,
+      displayIndex: index + 1 // 添加显示序号，从1开始
+    }));
   }, [detectionResult, showIgnored, selectedCategory, ignoredErrors]);
 
   // 统计信息
